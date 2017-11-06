@@ -4,7 +4,7 @@ var mysql = require('mysql');
 
 var resolve = require('url').resolve;
 var fs = require('fs');
-//var scrapingChecker = require('scraping-checker');
+
 var scrapingParser = require('./lib/scraping-parser');
 var initQueueInstance = require('./lib/init-queue').crateInitQueue((
     mysql.createConnection({
@@ -16,14 +16,30 @@ var initQueueInstance = require('./lib/init-queue').crateInitQueue((
 ));
 
 
-//var URL = 'https://www.google.com.ua/search?q=%D0%BE%D0%BD%D0%BE+%D1%81%D0%BC%D0%BE%D1%82%D1%80%D0%B5%D1%82%D1%8C+%D0%BE%D0%BD%D0%BB%D0%B0%D0%B9%D0%BD+2017&oq=%D0%BE%D0%BD%D0%BE+%D1%81%D0%BC%D0%BE%D1%82%D1%80%D0%B5%D1%82%D1%8C+%D0%BE%D0%BD%D0%BB%D0%B0%D0%B9%D0%BD+2017';
 
-initQueueInstance.getLast();
+
+console.log(fs.readFileSync('./data.html'));
+
+var scrapingParserInstance = scrapingParser.createParser({
+    host : 'www.google/com/ua',
+    body : fs.readFileSync('./data.html'),
+    qScraper: [],
+    checker : {}
+});
+    scrapingParserInstance.parseGoogle()
+
+
 return;
+
+
+
+
+
+
 
 initQueueInstance.getLast(function(URL){
     var scriptsDomain = [];
-    var lastUrl;
+  //  var lastUrl;
 
     var q = tress(function(url, callback){
         needle.get(url, function(err, res){
@@ -31,22 +47,24 @@ initQueueInstance.getLast(function(URL){
 
             // var $ = cheerio.load(res.body);
             results = res.body;
-            console.log(res);
+          //  console.log(res);
+          //  return;
 
-            lastUrl = url.domain;
+            var lastUrl = res.req.agent.protocol + '//' + res.connection._host + res.connection._httpMessage.path;
 
             // scrapingChecker.check(res.domain, function(){
 
-            var scrapingParserInstance = scrapingParser.create({
+           var scrapingParserInstance = scrapingParser.create({
+                host : res.connection._host,
                 body : res.body,
                 qScraper: q,
-                qScript: scriptsDomain,
-                checker : scrapingChecker
+
             });
-            if(url.domain.indexOf('google.') !== -1){
+            if(res.connection._host.indexOf('google.') !== -1){
                 scrapingParserInstance.parseGoogle()
             }
             scrapingParserInstance.parseScript();
+            scrapingParserInstance.parseExternalHosts();
 
 
 
@@ -70,16 +88,20 @@ initQueueInstance.getLast(function(URL){
                         q.push(resolve(URL, $(this).attr('href')));
                     });
             */
-            callback();
+            callback(lastUrl);
         });
     }, 1);
 
     q.drain = function(){
-        initQueueInstance.setLastUrl(lastUrl);
+       // initQueueInstance.setLastUrl(lastUrl);
         //fs.writeFileSync('./data.json', JSON.stringify(results, null, 4));
         fs.writeFileSync('./data.html', results);
     }
 
-    q.push(URL);
+    q.push(URL, function (url) {
+        console.log('ddd');
+        console.log(url);
+        initQueueInstance.complateLastUrl(url)
+    });
 
 });
