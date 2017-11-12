@@ -1,106 +1,131 @@
 var tress = require('tress');
 var needle = require('needle');
 var mysql = require('mysql');
+var scrapingChecker = require('./lib/scraping-checker');
 
 var resolve = require('url').resolve;
 var fs = require('fs');
 
 var scrapingParser = require('./lib/scraping-parser');
-var initQueueInstance = require('./lib/init-queue').crateInitQueue((
-    mysql.createConnection({
-        host: "localhost",
-        user: "root",
-        password: "1111",
-        database: "scraping"
-    })
-));
-
-
-
-
-console.log(fs.readFileSync('./data.html'));
-
-var scrapingParserInstance = scrapingParser.createParser({
-    host : 'www.google/com/ua',
-    body : fs.readFileSync('./data.html'),
-    qScraper: [],
-    checker : {}
+var mysqlConnect = mysql.createConnection({
+    host: "localhost",
+    user: "root",
+    password: "1111",
+    database: "scraping"
 });
-    scrapingParserInstance.parseGoogle()
+
+
+
+var Horseman = require('node-horseman');
+var horseman = new Horseman();
+
+var r = [];
+horseman
+    .userAgent('Mozilla/5.0 (Windows NT 6.1; WOW64; rv:27.0) Gecko/20100101 Firefox/27.0')
+    .on('loadFinished', function( res ){
+        console.log('loadFinished');
+        console.log(r.length);
+    })
+    .on('resourceReceived', function( res ){
+        if(res.contentType && res.contentType.indexOf('javascript') !== -1){
+            console.log(res.url);
+            r.push(res.url)
+        }
+
+    })
+    .open('http://okino.tv')
+
+   /* .evaluate(function(ms, done){
+        var pars = function () {
+            var r = [];
+            $('script[src]').each(function () {
+
+                r.push( $(this).attr('src') );
+
+            });
+            done(null, r );
+        }
+        $(document).ready(function () {
+            var intr;
+            intr = setInterval(function () {
+                if(document.readyState == "complete"){
+                    clearInterval(intr);
+                    pars();
+                }
+
+            },200);
+
+        });
+        if(document.readyState == "complete"){
+            //return '1';
+            setTimeout(function () {
+                pars();
+
+            }, 500);
+        }
+
+    }, 100)
+    .then(function(actualMs){
+        console.log(actualMs);
+    })*/
+   // .close();
+
+
 
 
 return;
 
 
+var initQueueInstance = require('./lib/init-queue').crateInitQueue(mysqlConnect);
 
-
+var scrapingCheckerInstance = scrapingChecker.crateScrapingChecker(mysqlConnect);
 
 
 
 initQueueInstance.getLast(function(URL){
-    var scriptsDomain = [];
-  //  var lastUrl;
 
+    console.log('URL')
+    console.log(URL)
+    var results, lastUrl;
     var q = tress(function(url, callback){
+
         needle.get(url, function(err, res){
+
             if (err) throw err;
 
-            // var $ = cheerio.load(res.body);
             results = res.body;
-          //  console.log(res);
-          //  return;
 
-            var lastUrl = res.req.agent.protocol + '//' + res.connection._host + res.connection._httpMessage.path;
 
-            // scrapingChecker.check(res.domain, function(){
+            var currentUrl = res.req.agent.protocol + '//' + res.connection._host + res.connection._httpMessage.path;
 
-           var scrapingParserInstance = scrapingParser.create({
+            lastUrl = currentUrl;
+           var scrapingParserInstance = scrapingParser.createParser({
+                url : currentUrl,
                 host : res.connection._host,
+                protocol : res.req.agent.protocol,
                 body : res.body,
                 qScraper: q,
-
+                checker : scrapingCheckerInstance,
             });
             if(res.connection._host.indexOf('google.') !== -1){
                 scrapingParserInstance.parseGoogle()
             }
             scrapingParserInstance.parseScript();
-            scrapingParserInstance.parseExternalHosts();
+          //  scrapingParserInstance.parseExternalHosts();
 
-
-
-            //   });
-
-
-            /*        if($('.b_infopost').contents().eq(2).text().trim().slice(0, -1) === 'Алексей Козлов'){
-                        results.push({
-                            title: $('h1').text(),
-                            date: $('.b_infopost>.date').text(),
-                            href: url,
-                            size: $('.newsbody').text().length
-                        });
-                    }
-
-                    $('.b_rewiev p>a').each(function() {
-                        q.push($(this).attr('href'));
-                    });
-
-                    $('.bpr_next>a').each(function() {
-                        q.push(resolve(URL, $(this).attr('href')));
-                    });
-            */
-            callback(lastUrl);
+            callback(null, currentUrl);
         });
-    }, 1);
+    }, -1000);
 
     q.drain = function(){
-       // initQueueInstance.setLastUrl(lastUrl);
+        console.log('lastUrl');
+        console.log(lastUrl);
+   //    initQueueInstance.setLastUrl(lastUrl);
         //fs.writeFileSync('./data.json', JSON.stringify(results, null, 4));
         fs.writeFileSync('./data.html', results);
     }
 
     q.push(URL, function (url) {
-        console.log('ddd');
-        console.log(url);
         initQueueInstance.complateLastUrl(url)
     });
 

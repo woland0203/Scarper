@@ -10,6 +10,7 @@
     "cheerio": "^0.20.0",
     "mysql": "^2.15.0",
     "needle": "^1.0.0",
+    "node-horseman": "^3.3.0",
     "tress": "^1.0.0"
   }
 }
